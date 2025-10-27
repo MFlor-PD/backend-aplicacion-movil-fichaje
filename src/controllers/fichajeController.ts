@@ -82,15 +82,67 @@ const registrarExtra = async (req: Request, res: Response) => {
 };
 
 // Historial de fichajes
+// Historial de fichajes con totales
 const historialFichajes = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
     const fichajes = await Fichaje.find({ usuario: userId }).sort({ fecha: -1 });
-    res.json(fichajes);
+
+    let totalMes = 0;
+    let totalSemana = 0;
+
+    const historial = fichajes.map(f => {
+      let duracionHoras = 0;
+      let importeDia = 0;
+
+      if (f.inicio && f.fin) {
+        const inicioParts = f.inicio.split(":").map(Number);
+        const finParts = f.fin.split(":").map(Number);
+        const inicioDate = new Date(f.fecha);
+        inicioDate.setHours(inicioParts[0], inicioParts[1], 0, 0);
+        const finDate = new Date(f.fecha);
+        finDate.setHours(finParts[0], finParts[1], 0, 0);
+
+        duracionHoras = (finDate.getTime() - inicioDate.getTime()) / 1000 / 3600;
+        if (duracionHoras < 0) duracionHoras += 24; // por si cruza medianoche
+        importeDia = duracionHoras * user.valorHora;
+      }
+
+      totalMes += importeDia;
+
+      // calcular total semana (domingo-sábado actual)
+      const hoy = new Date();
+      const semanaInicio = new Date(hoy);
+      semanaInicio.setDate(hoy.getDate() - hoy.getDay());
+      const semanaFin = new Date(semanaInicio);
+      semanaFin.setDate(semanaInicio.getDate() + 6);
+
+      if (new Date(f.fecha) >= semanaInicio && new Date(f.fecha) <= semanaFin) {
+        totalSemana += importeDia;
+      }
+
+      return {
+        ...f.toObject(),
+        duracionHoras: Number(duracionHoras.toFixed(2)),
+        importeDia: Number(importeDia.toFixed(2)),
+      };
+    });
+
+    res.json({
+      historial,
+      totales: {
+        semana: Number(totalSemana.toFixed(2)),
+        mes: Number(totalMes.toFixed(2)),
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     res.status(500).json({ error: message });
   }
 };
+
 
 export { registrarEntrada, registrarSalida, registrarExtra, historialFichajes };

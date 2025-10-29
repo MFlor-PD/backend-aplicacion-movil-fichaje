@@ -1,10 +1,12 @@
 import { Router } from "express";
 import { registrarEntrada, registrarSalida, registrarExtra, historialFichajes } from '../controllers/fichajeController.js'
+import { authMiddleware } from "../middleware/authMiddleware.js";
+
 const router = Router();
 
-router.post("/entrada", registrarEntrada);
-router.put("/salida/:fichajeId", registrarSalida);
-router.put("/extra/:fichajeId", registrarExtra);
-router.get("/historial/:userId", historialFichajes);
+router.post("/entrada", authMiddleware, registrarEntrada);
+router.put("/salida/:fichajeId", authMiddleware, registrarSalida);
+router.put("/extra/:fichajeId", authMiddleware, registrarExtra);
+router.get("/historial", authMiddleware, historialFichajes); // 👈 ya no necesita :userId
 
 export default router;

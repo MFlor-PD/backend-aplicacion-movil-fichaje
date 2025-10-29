@@ -1,11 +1,11 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { Fichaje } from "../models/fichaje.js";
-import { User } from "../models/user.js";
+import { AuthRequest } from "../middleware/authMiddleware.js"; // tu middleware
 
 // Registrar entrada
-const registrarEntrada = async (req: Request, res: Response) => {
+const registrarEntrada = async (req: AuthRequest, res: Response) => {
   try {
-    const { userId } = req.params;
+    const userId = req.user!.id; // viene del token
     const now = new Date();
     const inicio = now.toTimeString().slice(0, 5); // "HH:MM"
 
@@ -26,7 +26,7 @@ const registrarEntrada = async (req: Request, res: Response) => {
 };
 
 // Registrar salida
-const registrarSalida = async (req: Request, res: Response) => {
+const registrarSalida = async (req: AuthRequest, res: Response) => {
   try {
     const { fichajeId } = req.params;
 
@@ -36,18 +36,16 @@ const registrarSalida = async (req: Request, res: Response) => {
     const now = new Date();
     const fin = now.toTimeString().slice(0, 5);
 
-    // Calcular duración en horas
+    const inicioParts = fichaje.inicio.split(":").map(Number);
     const inicioDate = new Date(fichaje.fecha);
-    const [h, m] = fichaje.inicio.split(":").map(Number);
-    inicioDate.setHours(h, m);
+    inicioDate.setHours(inicioParts[0], inicioParts[1], 0, 0);
 
-    const duracionHoras = (now.getTime() - inicioDate.getTime()) / 1000 / 3600; // horas como decimal
+    let duracionHoras = (now.getTime() - inicioDate.getTime()) / 1000 / 3600;
+    if (duracionHoras < 0) duracionHoras += 24; // por si cruza medianoche
 
-    // Calcular importe del día
-    const valorHora = (fichaje.usuario as any).valorHora || 0; // valor/hora del usuario
+    const valorHora = (fichaje.usuario as any).valorHora || 0;
     const importeDia = duracionHoras * valorHora;
 
-    // Actualizar fichaje
     fichaje.fin = fin;
     fichaje.duracionHoras = Number(duracionHoras.toFixed(2));
     fichaje.importeDia = Number(importeDia.toFixed(2));
@@ -62,7 +60,7 @@ const registrarSalida = async (req: Request, res: Response) => {
 };
 
 // Registrar extra
-const registrarExtra = async (req: Request, res: Response) => {
+const registrarExtra = async (req: AuthRequest, res: Response) => {
   try {
     const { fichajeId } = req.params;
 
@@ -82,13 +80,9 @@ const registrarExtra = async (req: Request, res: Response) => {
 };
 
 // Historial de fichajes
-// Historial de fichajes con totales
-const historialFichajes = async (req: Request, res: Response) => {
+const historialFichajes = async (req: AuthRequest, res: Response) => {
   try {
-    const { userId } = req.params;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
-
+    const userId = req.user!.id; // viene del token
     const fichajes = await Fichaje.find({ usuario: userId }).sort({ fecha: -1 });
 
     let totalMes = 0;
@@ -107,13 +101,13 @@ const historialFichajes = async (req: Request, res: Response) => {
         finDate.setHours(finParts[0], finParts[1], 0, 0);
 
         duracionHoras = (finDate.getTime() - inicioDate.getTime()) / 1000 / 3600;
-        if (duracionHoras < 0) duracionHoras += 24; // por si cruza medianoche
-        importeDia = duracionHoras * user.valorHora;
+        if (duracionHoras < 0) duracionHoras += 24;
+        importeDia = duracionHoras * ((req.user as any).valorHora || 0);
       }
 
       totalMes += importeDia;
 
-      // calcular total semana (domingo-sábado actual)
+      // Total semana (domingo-sábado)
       const hoy = new Date();
       const semanaInicio = new Date(hoy);
       semanaInicio.setDate(hoy.getDate() - hoy.getDay());
@@ -143,6 +137,5 @@ const historialFichajes = async (req: Request, res: Response) => {
     res.status(500).json({ error: message });
   }
 };
-
 
 export { registrarEntrada, registrarSalida, registrarExtra, historialFichajes };

@@ -15,12 +15,12 @@ const createUser = async (req: Request, res: Response) => {
     }
 
     // Encriptar contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
+    
 
     const user = new User({
       nombre,
       email,
-      password: hashedPassword,
+      password,
       valorHora,
     });
 

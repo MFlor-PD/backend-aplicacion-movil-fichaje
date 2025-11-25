@@ -21,3 +21,5 @@ app.use("/api/fichajes", fichajeRoutes);
 
 
 export default app;
+
+//npm run dev

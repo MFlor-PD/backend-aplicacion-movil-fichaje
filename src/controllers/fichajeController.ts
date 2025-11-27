@@ -79,6 +79,23 @@ const registrarExtra = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Saber si el usuario tiene un fichaje en curso
+const fichajeEnCurso = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    const abierto = await Fichaje.findOne({
+      usuario: userId,
+      fin: { $exists: false }
+    }).sort({ fecha: -1 });
+
+    res.json({ abierto });
+  } catch (err) {
+    res.status(500).json({ error: "Error obteniendo fichaje en curso" });
+  }
+};
+
+
 // Historial de fichajes
 const historialFichajes = async (req: AuthRequest, res: Response) => {
   try {
@@ -138,4 +155,4 @@ const historialFichajes = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export { registrarEntrada, registrarSalida, registrarExtra, historialFichajes };
+export { registrarEntrada, registrarSalida, registrarExtra, historialFichajes, fichajeEnCurso };

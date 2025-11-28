@@ -15,12 +15,13 @@ const createUser = async (req: Request, res: Response) => {
     }
 
     // Encriptar contraseña
-    
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const user = new User({
       nombre,
       email,
-      password,
+      password: hashedPassword,
       valorHora,
     });
 
@@ -92,17 +93,42 @@ const loginUser = async (req: Request, res: Response) => {
 // Actualizar perfil
 const updateProfile = async (req: Request, res: Response) => {
   try {
-    const { nombre, foto, valorHora } = req.body;
+    const { nombre, foto, valorHora, password } = req.body;
+
+    const dataToUpdate: any = { nombre, foto, valorHora };
+
+    // Si viene password, la encriptamos
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      dataToUpdate.password = await bcrypt.hash(password, salt);
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
-      { nombre, foto, valorHora },
+      dataToUpdate,
       { new: true }
     ).select("-password");
 
-    if (!updatedUser)
+    if (!updatedUser) {
       return res.status(404).json({ error: "Usuario no encontrado" });
+    }
 
-    res.json(updatedUser);
+    // Si cambió la contraseña, generamos un token nuevo
+    let token;
+    if (password) {
+      token = jwt.sign(
+        { id: updatedUser._id, email: updatedUser.email },
+        process.env.JWT_SECRET!,
+        { expiresIn: "30d" }
+      );
+    }
+
+    res.json({
+      user: updatedUser,
+      token: token || undefined,
+      passwordChanged: Boolean(password),
+    });
+
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error al actualizar perfil";

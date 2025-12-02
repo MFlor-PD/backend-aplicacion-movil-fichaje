@@ -155,4 +155,33 @@ const historialFichajes = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export { registrarEntrada, registrarSalida, registrarExtra, historialFichajes, fichajeEnCurso };
+// Eliminar un fichaje por ID
+const eliminarFichaje = async (req: AuthRequest, res: Response) => {
+  try {
+    const { fichajeId } = req.params;
+    const userId = req.user!.id;
+
+    const fichaje = await Fichaje.findOne({ _id: fichajeId, usuario: userId });
+    if (!fichaje) return res.status(404).json({ error: "Fichaje no encontrado" });
+
+    await fichaje.deleteOne();
+    res.json({ message: "Fichaje eliminado correctamente" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+};
+
+// Eliminar todo el historial del usuario
+const eliminarHistorial = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    await Fichaje.deleteMany({ usuario: userId });
+    res.json({ message: "Historial completo eliminado correctamente" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+};
+
+export { registrarEntrada, registrarSalida, registrarExtra, historialFichajes, fichajeEnCurso, eliminarFichaje, eliminarHistorial };

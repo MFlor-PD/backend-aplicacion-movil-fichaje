@@ -8,31 +8,16 @@ const createUser = async (req: Request, res: Response) => {
   try {
     const { nombre, email, password, valorHora } = req.body;
 
-    // Verificar si el usuario ya existe
     const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ error: "El email ya está registrado" });
-    }
+    if (existingUser) return res.status(400).json({ error: "Email ya registrado" });
 
-    // Encriptar contraseña
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const user = new User({ nombre, email, password, valorHora });
+    await user.save(); // middleware pre("save") hace hash automáticamente
 
-    const user = new User({
-      nombre,
-      email,
-      password: hashedPassword,
-      valorHora,
+    // Generar token
+    const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET!, {
+      expiresIn: "30d",
     });
-
-    await user.save();
-
-    // Crear token JWT
-    const token = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET!,
-      { expiresIn: "30d" }
-    );
 
     res.status(201).json({
       message: "Usuario creado correctamente",
@@ -45,17 +30,18 @@ const createUser = async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Error al crear usuario";
-    res.status(400).json({ error: message });
+    const message = err instanceof Error ? err.message : "Error al crear usuario";
+    res.status(500).json({ error: message });
   }
 };
 
+ 
 // Iniciar sesión
 const loginUser = async (req: Request, res: Response) => {
   try {
+     console.log("REQ.BODY:", req.body);
     const { email, password } = req.body;
-
+    console.log("Email:", email, "Password:", password);
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
@@ -95,46 +81,48 @@ const updateProfile = async (req: Request, res: Response) => {
   try {
     const { nombre, foto, valorHora, password } = req.body;
 
-    const dataToUpdate: any = { nombre, foto, valorHora };
+    // Buscar al usuario
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
 
-    // Si viene password, la encriptamos
-    if (password) {
-      const salt = await bcrypt.genSalt(10);
-      dataToUpdate.password = await bcrypt.hash(password, salt);
-    }
+    // Actualizar datos generales
+    if (nombre) user.nombre = nombre;
+    if (foto) user.foto = foto;
+    if (valorHora !== undefined) user.valorHora = valorHora;
 
-    const updatedUser = await User.findByIdAndUpdate(
-      req.params.id,
-      dataToUpdate,
-      { new: true }
-    ).select("-password");
+    // Actualizar password si viene
+    if (password) user.password = password; // middleware pre("save") hará hash y actualizará passwordChangedAt
 
-    if (!updatedUser) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
-    }
+    await user.save(); // ⚡ dispara middleware pre("save")
 
-    // Si cambió la contraseña, generamos un token nuevo
+    // Generar token nuevo solo si cambió contraseña
     let token;
     if (password) {
       token = jwt.sign(
-        { id: updatedUser._id, email: updatedUser.email },
+        { id: user._id, email: user.email },
         process.env.JWT_SECRET!,
         { expiresIn: "30d" }
       );
     }
 
     res.json({
-      user: updatedUser,
+      user: {
+        id: user._id,
+        nombre: user.nombre,
+        email: user.email,
+        valorHora: user.valorHora,
+        foto: user.foto,
+      },
       token: token || undefined,
       passwordChanged: Boolean(password),
     });
-
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error al actualizar perfil";
     res.status(500).json({ error: message });
   }
 };
+
 
 // Obtener datos de un usuario específico
 const getUser = async (req: Request, res: Response) => {

@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.js";
+import { Fichaje } from "../models/fichaje.js";
+import { AuthRequest } from "../middleware/authMiddleware.js"; // tu middleware de auth
 
 // Crear usuario (registro)
 const createUser = async (req: Request, res: Response) => {
@@ -14,10 +16,7 @@ const createUser = async (req: Request, res: Response) => {
     const user = new User({ nombre, email, password, valorHora });
     await user.save(); // middleware pre("save") hace hash automáticamente
 
-    // Generar token
-    const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET!, {
-      expiresIn: "30d",
-    });
+    const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: "30d" });
 
     res.status(201).json({
       message: "Usuario creado correctamente",
@@ -35,29 +34,17 @@ const createUser = async (req: Request, res: Response) => {
   }
 };
 
- 
 // Iniciar sesión
 const loginUser = async (req: Request, res: Response) => {
   try {
-     console.log("REQ.BODY:", req.body);
     const { email, password } = req.body;
-    console.log("Email:", email, "Password:", password);
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
-    }
+    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ error: "Contraseña incorrecta" });
-    }
+    if (!isMatch) return res.status(401).json({ error: "Contraseña incorrecta" });
 
-    // Generar token JWT
-    const token = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET!,
-      { expiresIn: "30d" }
-    );
+    const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: "30d" });
 
     res.json({
       message: "Login exitoso",
@@ -70,39 +57,30 @@ const loginUser = async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Error al iniciar sesión";
+    const message = err instanceof Error ? err.message : "Error al iniciar sesión";
     res.status(500).json({ error: message });
   }
 };
 
 // Actualizar perfil
-const updateProfile = async (req: Request, res: Response) => {
+const updateProfile = async (req: AuthRequest, res: Response) => {
   try {
     const { nombre, foto, valorHora, password } = req.body;
+    const userId = req.user!.id;
 
-    // Buscar al usuario
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
 
-    // Actualizar datos generales
     if (nombre) user.nombre = nombre;
     if (foto) user.foto = foto;
     if (valorHora !== undefined) user.valorHora = valorHora;
+    if (password) user.password = password;
 
-    // Actualizar password si viene
-    if (password) user.password = password; // middleware pre("save") hará hash y actualizará passwordChangedAt
+    await user.save(); // dispara middleware pre("save") para hash
 
-    await user.save(); // ⚡ dispara middleware pre("save")
-
-    // Generar token nuevo solo si cambió contraseña
     let token;
     if (password) {
-      token = jwt.sign(
-        { id: user._id, email: user.email },
-        process.env.JWT_SECRET!,
-        { expiresIn: "30d" }
-      );
+      token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: "30d" });
     }
 
     res.json({
@@ -117,24 +95,40 @@ const updateProfile = async (req: Request, res: Response) => {
       passwordChanged: Boolean(password),
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Error al actualizar perfil";
+    const message = err instanceof Error ? err.message : "Error al actualizar perfil";
     res.status(500).json({ error: message });
   }
 };
 
-
 // Obtener datos de un usuario específico
-const getUser = async (req: Request, res: Response) => {
+const getUser = async (req: AuthRequest, res: Response) => {
   try {
-    const user = await User.findById(req.params.id).select("-password");
+    const userId = req.user!.id;
+    const user = await User.findById(userId).select("-password");
     if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
     res.json(user);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Error al obtener usuario";
+    const message = err instanceof Error ? err.message : "Error al obtener usuario";
     res.status(500).json({ error: message });
   }
 };
 
-export { createUser, loginUser, updateProfile, getUser };
+// 🔹 NUEVO: Eliminar usuario y todo su historial
+const deleteUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // 1️⃣ Eliminar todos los fichajes del usuario
+    await Fichaje.deleteMany({ usuario: userId });
+
+    // 2️⃣ Eliminar usuario
+    await User.findByIdAndDelete(userId);
+
+    res.json({ message: "Usuario y todo su historial eliminado correctamente" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error eliminando usuario";
+    res.status(500).json({ error: message });
+  }
+};
+
+export { createUser, loginUser, updateProfile, getUser, deleteUser };

@@ -78,6 +78,7 @@ const updateProfile = async (req: AuthRequest, res: Response) => {
 
     // Actualizar foto (acepta vacío)
     if (foto !== undefined) user.foto = foto;
+    
 
     // Actualizar valor hora
     if (valorHora !== undefined) user.valorHora = valorHora;

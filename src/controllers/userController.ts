@@ -65,22 +65,42 @@ const loginUser = async (req: Request, res: Response) => {
 // Actualizar perfil
 const updateProfile = async (req: AuthRequest, res: Response) => {
   try {
-    const { nombre, foto, valorHora, password } = req.body;
+    const { nombre, foto, valorHora, password, email } = req.body;
     const userId = req.user!.id;
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
 
+    let emailChanged = false;
+
+    // Actualizar nombre
     if (nombre) user.nombre = nombre;
-    if (foto) user.foto = foto;
+
+    // Actualizar foto (acepta vacío)
+    if (foto !== undefined) user.foto = foto;
+
+    // Actualizar valor hora
     if (valorHora !== undefined) user.valorHora = valorHora;
+
+    // Actualizar password
     if (password) user.password = password;
 
-    await user.save(); // dispara middleware pre("save") para hash
+    // Actualizar email y marcar cambio
+    if (email && email !== user.email) {
+      user.email = email;
+      emailChanged = true;
+    }
 
+    await user.save(); // dispara middleware pre("save") para hash si cambió password
+
+    // Generar token solo si cambió la contraseña
     let token;
     if (password) {
-      token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: "30d" });
+      token = jwt.sign(
+        { id: user._id, email: user.email },
+        process.env.JWT_SECRET!,
+        { expiresIn: "30d" }
+      );
     }
 
     res.json({
@@ -93,12 +113,14 @@ const updateProfile = async (req: AuthRequest, res: Response) => {
       },
       token: token || undefined,
       passwordChanged: Boolean(password),
+      emailChanged: emailChanged,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al actualizar perfil";
     res.status(500).json({ error: message });
   }
 };
+
 
 // Obtener datos de un usuario específico
 const getUser = async (req: AuthRequest, res: Response) => {

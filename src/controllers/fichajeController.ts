@@ -63,10 +63,11 @@ const registrarSalida = async (req: AuthRequest, res: Response) => {
 const registrarExtra = async (req: AuthRequest, res: Response) => {
   try {
     const { fichajeId } = req.params;
+    const { extra } = req.body;
 
     const updated = await Fichaje.findByIdAndUpdate(
       fichajeId,
-      { extra: true },
+      { extra: !!extra },
       { new: true }
     );
 

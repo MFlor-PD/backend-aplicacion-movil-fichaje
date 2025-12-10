@@ -1,9 +1,10 @@
+//src/app.ts
 import express, { Application } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import userRoutes from "./routes/userRoute.js";
 import fichajeRoutes from "./routes/fichajeRoute.js";
-
+import recoveryRoutes from "./routes/recoveyPasswordRoute.js"
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ app.get("/", (req, res) => {
 });
 app.use("/api/users", userRoutes);
 app.use("/api/fichajes", fichajeRoutes);
+app.use("/api/recovery", recoveryRoutes);
 
 
 export default app;

@@ -4,7 +4,7 @@ POST http://localhost:4000/api/recovery/recover
 
 {
   "email": "flo",
-  "destino": "sshiftcontrollingnoreply@gmail.com"
+  "destino": "unemailreal@tellegauncodigo.com"
 }
 
 

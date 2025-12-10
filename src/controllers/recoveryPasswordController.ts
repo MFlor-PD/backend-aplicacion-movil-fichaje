@@ -15,7 +15,7 @@ export const requestPasswordRecovery = async (req: Request, res: Response) => {
     if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
 
     // Limitar a 1 código al día
-   /* const today = new Date();
+   const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const existing = await RecoveryCode.findOne({
@@ -26,7 +26,7 @@ export const requestPasswordRecovery = async (req: Request, res: Response) => {
     if (existing)
       return res
         .status(429)
-        .json({ error: "Ya se solicitó un código hoy. Intenta mañana." });*/
+        .json({ error: "Ya se solicitó un código hoy. Intenta mañana." });
 
     // Limpiar códigos antiguos
     await RecoveryCode.deleteMany({

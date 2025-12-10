@@ -1,20 +1,18 @@
 import { Response } from "express";
 import { Fichaje } from "../models/fichaje.js";
-import { AuthRequest } from "../middleware/authMiddleware.js"; // tu middleware
+import { AuthRequest } from "../middleware/authMiddleware.js";
 
 // Registrar entrada
 const registrarEntrada = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user!.id; // viene del token
-    const now = new Date();
-    const inicio = now.toTimeString().slice(0, 5); // "HH:MM"
-
+    const userId = req.user!.id;
+    const now = new Date(); // UTC
     const fichaje = new Fichaje({
       usuario: userId,
-      fecha: now,
-      inicio,
+      fecha: now, // guardamos UTC
       duracionHoras: 0,
       importeDia: 0,
+      extra: false,
     });
 
     await fichaje.save();
@@ -29,27 +27,16 @@ const registrarEntrada = async (req: AuthRequest, res: Response) => {
 const registrarSalida = async (req: AuthRequest, res: Response) => {
   try {
     const { fichajeId } = req.params;
-
     const fichaje = await Fichaje.findById(fichajeId).populate("usuario");
     if (!fichaje) return res.status(404).json({ error: "Fichaje no encontrado" });
 
     const now = new Date();
-    const fin = now.toTimeString().slice(0, 5);
-
-    const inicioParts = fichaje.inicio.split(":").map(Number);
-    const inicioDate = new Date(fichaje.fecha);
-    inicioDate.setHours(inicioParts[0], inicioParts[1], 0, 0);
-
-    let duracionHoras = (now.getTime() - inicioDate.getTime()) / 1000 / 3600;
-    if (duracionHoras < 0) duracionHoras += 24; // por si cruza medianoche
-
+    const duracionHoras = (now.getTime() - fichaje.fecha.getTime()) / 1000 / 3600;
     const valorHora = (fichaje.usuario as any).valorHora || 0;
     const importeDia = duracionHoras * valorHora;
 
-    fichaje.fin = fin;
     fichaje.duracionHoras = Number(duracionHoras.toFixed(2));
     fichaje.importeDia = Number(importeDia.toFixed(2));
-
     await fichaje.save();
 
     res.json({ message: "Salida registrada", fichaje });
@@ -80,11 +67,10 @@ const registrarExtra = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Saber si el usuario tiene un fichaje en curso
+// Fichaje en curso
 const fichajeEnCurso = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-
     const abierto = await Fichaje.findOne({
       usuario: userId,
       fin: { $exists: false }
@@ -96,50 +82,31 @@ const fichajeEnCurso = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
 // Historial de fichajes
 const historialFichajes = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user!.id; // viene del token
+    const userId = req.user!.id;
     const fichajes = await Fichaje.find({ usuario: userId }).sort({ fecha: -1 });
 
     let totalMes = 0;
     let totalSemana = 0;
 
     const historial = fichajes.map(f => {
-      let duracionHoras = 0;
-      let importeDia = 0;
-
-      if (f.inicio && f.fin) {
-        const inicioParts = f.inicio.split(":").map(Number);
-        const finParts = f.fin.split(":").map(Number);
-        const inicioDate = new Date(f.fecha);
-        inicioDate.setHours(inicioParts[0], inicioParts[1], 0, 0);
-        const finDate = new Date(f.fecha);
-        finDate.setHours(finParts[0], finParts[1], 0, 0);
-
-        duracionHoras = (finDate.getTime() - inicioDate.getTime()) / 1000 / 3600;
-        if (duracionHoras < 0) duracionHoras += 24;
-        importeDia = duracionHoras * ((req.user as any).valorHora || 0);
-      }
+      const duracionHoras = f.duracionHoras || 0;
+      const importeDia = f.importeDia || 0;
 
       totalMes += importeDia;
 
-      // Total semana (domingo-sábado)
       const hoy = new Date();
       const semanaInicio = new Date(hoy);
       semanaInicio.setDate(hoy.getDate() - hoy.getDay());
       const semanaFin = new Date(semanaInicio);
       semanaFin.setDate(semanaInicio.getDate() + 6);
 
-      if (new Date(f.fecha) >= semanaInicio && new Date(f.fecha) <= semanaFin) {
-        totalSemana += importeDia;
-      }
+      if (f.fecha >= semanaInicio && f.fecha <= semanaFin) totalSemana += importeDia;
 
       return {
         ...f.toObject(),
-        duracionHoras: Number(duracionHoras.toFixed(2)),
-        importeDia: Number(importeDia.toFixed(2)),
       };
     });
 
@@ -156,12 +123,11 @@ const historialFichajes = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Eliminar un fichaje por ID
+// Eliminar un fichaje
 const eliminarFichaje = async (req: AuthRequest, res: Response) => {
   try {
     const { fichajeId } = req.params;
     const userId = req.user!.id;
-
     const fichaje = await Fichaje.findOne({ _id: fichajeId, usuario: userId });
     if (!fichaje) return res.status(404).json({ error: "Fichaje no encontrado" });
 
@@ -173,7 +139,7 @@ const eliminarFichaje = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Eliminar todo el historial del usuario
+// Eliminar todo el historial
 const eliminarHistorial = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;

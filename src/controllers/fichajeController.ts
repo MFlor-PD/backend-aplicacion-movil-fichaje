@@ -6,10 +6,23 @@ import { AuthRequest } from "../middleware/authMiddleware.js";
 const registrarEntrada = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+    if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+
+    // Evitar doble fichaje abierto
+    const abierto = await Fichaje.findOne({
+      usuario: userId,
+      fin: { $exists: false },
+    });
+
+    if (abierto) {
+      return res.status(400).json({ error: "Ya hay un fichaje abierto" });
+    }
+
     const now = new Date(); // UTC
     const fichaje = new Fichaje({
       usuario: userId,
-      fecha: now, // guardamos UTC
+      fecha: now,
+       inicio: now,
       duracionHoras: 0,
       importeDia: 0,
       extra: false,
@@ -18,8 +31,8 @@ const registrarEntrada = async (req: AuthRequest, res: Response) => {
     await fichaje.save();
     res.status(201).json({ message: "Entrada registrada", fichaje });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).json({ error: message });
+    console.error("💥 registrarEntrada:", err);
+    res.status(500).json({ error: "Error registrando entrada" });
   }
 };
 
@@ -32,17 +45,18 @@ const registrarSalida = async (req: AuthRequest, res: Response) => {
 
     const now = new Date();
     const duracionHoras = (now.getTime() - fichaje.fecha.getTime()) / 1000 / 3600;
-    const valorHora = (fichaje.usuario as any).valorHora || 0;
+    const valorHora = (fichaje.usuario as any)?.valorHora || 0;
     const importeDia = duracionHoras * valorHora;
 
+    fichaje.fin = now; // Guardar hora de salida
     fichaje.duracionHoras = Number(duracionHoras.toFixed(2));
     fichaje.importeDia = Number(importeDia.toFixed(2));
     await fichaje.save();
 
     res.json({ message: "Salida registrada", fichaje });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).json({ error: message });
+    console.error("💥 registrarSalida:", err);
+    res.status(500).json({ error: "Error registrando salida" });
   }
 };
 
@@ -62,8 +76,8 @@ const registrarExtra = async (req: AuthRequest, res: Response) => {
 
     res.json({ message: "Fichaje marcado como extra", fichaje: updated });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).json({ error: message });
+    console.error("💥 registrarExtra:", err);
+    res.status(500).json({ error: "Error marcando extra" });
   }
 };
 
@@ -71,13 +85,16 @@ const registrarExtra = async (req: AuthRequest, res: Response) => {
 const fichajeEnCurso = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+    if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+
     const abierto = await Fichaje.findOne({
       usuario: userId,
-      fin: { $exists: false }
+      fin: { $exists: false },
     }).sort({ fecha: -1 });
 
-    res.json({ abierto });
+    res.json({ fichajeEnCurso: abierto });
   } catch (err) {
+    console.error("💥 fichajeEnCurso:", err);
     res.status(500).json({ error: "Error obteniendo fichaje en curso" });
   }
 };
@@ -86,6 +103,8 @@ const fichajeEnCurso = async (req: AuthRequest, res: Response) => {
 const historialFichajes = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+    if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+
     const fichajes = await Fichaje.find({ usuario: userId }).sort({ fecha: -1 });
 
     let totalMes = 0;
@@ -105,9 +124,7 @@ const historialFichajes = async (req: AuthRequest, res: Response) => {
 
       if (f.fecha >= semanaInicio && f.fecha <= semanaFin) totalSemana += importeDia;
 
-      return {
-        ...f.toObject(),
-      };
+      return { ...f.toObject() };
     });
 
     res.json({
@@ -118,8 +135,8 @@ const historialFichajes = async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).json({ error: message });
+    console.error("💥 historialFichajes:", err);
+    res.status(500).json({ error: "Error obteniendo historial" });
   }
 };
 
@@ -128,14 +145,16 @@ const eliminarFichaje = async (req: AuthRequest, res: Response) => {
   try {
     const { fichajeId } = req.params;
     const userId = req.user!.id;
+    if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+
     const fichaje = await Fichaje.findOne({ _id: fichajeId, usuario: userId });
     if (!fichaje) return res.status(404).json({ error: "Fichaje no encontrado" });
 
     await fichaje.deleteOne();
     res.json({ message: "Fichaje eliminado correctamente" });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).json({ error: message });
+    console.error("💥 eliminarFichaje:", err);
+    res.status(500).json({ error: "Error eliminando fichaje" });
   }
 };
 
@@ -143,12 +162,22 @@ const eliminarFichaje = async (req: AuthRequest, res: Response) => {
 const eliminarHistorial = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+
     await Fichaje.deleteMany({ usuario: userId });
     res.json({ message: "Historial completo eliminado correctamente" });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).json({ error: message });
+    console.error("💥 eliminarHistorial:", err);
+    res.status(500).json({ error: "Error eliminando historial" });
   }
 };
 
-export { registrarEntrada, registrarSalida, registrarExtra, historialFichajes, fichajeEnCurso, eliminarFichaje, eliminarHistorial };
+export {
+  registrarEntrada,
+  registrarSalida,
+  registrarExtra,
+  historialFichajes,
+  fichajeEnCurso,
+  eliminarFichaje,
+  eliminarHistorial,
+};

@@ -4,8 +4,8 @@ import { IUser } from "./user.js";
 export interface IFichaje extends Document {
   usuario: IUser["_id"];
   fecha: Date;
-  inicio: string; // "HH:MM"
-  fin?: string;   // "HH:MM"
+  inicio: Date; // "HH:MM"
+  fin?: Date;   // "HH:MM"
   extra?: boolean;
   duracionHoras?: number; // duración en horas
   importeDia?: number;   // duracionHoras * valorHora
@@ -15,8 +15,8 @@ const FichajeSchema: Schema<IFichaje> = new Schema(
   {
     usuario: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     fecha: { type: Date, required: true },
-    inicio: { type: String, required: true },
-    fin: { type: String },
+    inicio: { type: Date, required: true },
+    fin: { type: Date },
     extra: { type: Boolean, default: false },
     duracionHoras: { type: Number, default: 0 },
     importeDia: { type: Number, default: 0 },

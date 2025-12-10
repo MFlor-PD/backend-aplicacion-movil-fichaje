@@ -4,8 +4,8 @@ import { IUser } from "./user.js";
 export interface IFichaje extends Document {
   usuario: IUser["_id"];
   fecha: Date;
-  inicio: Date; // "HH:MM"
-  fin?: Date;   // "HH:MM"
+  inicio: Date;
+  fin?: Date;   
   extra?: boolean;
   duracionHoras?: number; // duración en horas
   importeDia?: number;   // duracionHoras * valorHora
